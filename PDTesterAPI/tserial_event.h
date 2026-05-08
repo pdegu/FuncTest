@@ -74,6 +74,7 @@
 #include <windows.h>
 #include "FTD2XX.H"
 
+namespace Passmark {
 
 #define SERIAL_PARITY_NONE 0
 #define SERIAL_PARITY_ODD  1
@@ -87,8 +88,8 @@
 #define SERIAL_CD_ON             5
 #define SERIAL_CD_OFF            6
 
-typedef unsigned long uint32;
-typedef void(*type_myCallBack) (void *object, void *parent, uint32 event);
+	typedef unsigned long uint32;
+	typedef void(*type_myCallBack) (void* object, void* parent, uint32 event);
 
 
 #define SERIAL_SIGNAL_NBR 7         // number of events in the thread
@@ -96,66 +97,68 @@ typedef void(*type_myCallBack) (void *object, void *parent, uint32 event);
 #define SERIAL_MAX_TX     256       // output buffer max size
 
 
-/* -------------------------------------------------------------------- */
-/* -----------------------------  Tserial  ---------------------------- */
-/* -------------------------------------------------------------------- */
-class Tserial_event
-{
-	// -------------------------------------------------------- //
-protected:
-	bool          ready;
-	bool          check_modem;
-	wchar_t       port[20];                          // port name "com1",...
-	int           rate;                              // baudrate
-	int           parityMode;
+	/* -------------------------------------------------------------------- */
+	/* -----------------------------  Tserial  ---------------------------- */
+	/* -------------------------------------------------------------------- */
+	class Tserial_event
+	{
+		// -------------------------------------------------------- //
+	protected:
+		bool          ready;
+		bool          check_modem;
+		wchar_t       port[20];                          // port name "com1",...
+		int           rate;                              // baudrate
+		int           parityMode;
 
-	HANDLE        serial_events[SERIAL_SIGNAL_NBR];  // events to wait on
-	unsigned int  threadid;                          // ...
-	FT_HANDLE     serial_handle;                     // ...
-	HANDLE        thread_handle;                     // ...
-	OVERLAPPED    ovReader;                          // Overlapped structure for ReadFile
-	OVERLAPPED    ovWriter;                          // Overlapped structure for WriteFile
-	OVERLAPPED    ovWaitEvent;                       // Overlapped structure for WaitCommEvent
-	char          tx_in_progress;                    // BOOL indicating if a WriteFile is
-	// in progress
-	char          rx_in_progress;                    // BOOL indicating if a ReadFile is
-	// in progress
-	char          WaitCommEventInProgress;
-	char          rxBuffer[SERIAL_MAX_RX];
-	int           max_rx_size;
-	int           received_size;
-	char          txBuffer[SERIAL_MAX_TX];
-	int           tx_size;
-	DWORD         dwCommEvent;                       // to store the result of the wait
+		HANDLE        serial_events[SERIAL_SIGNAL_NBR];  // events to wait on
+		unsigned int  threadid;                          // ...
+		FT_HANDLE     serial_handle;                     // ...
+		HANDLE        thread_handle;                     // ...
+		OVERLAPPED    ovReader;                          // Overlapped structure for ReadFile
+		OVERLAPPED    ovWriter;                          // Overlapped structure for WriteFile
+		OVERLAPPED    ovWaitEvent;                       // Overlapped structure for WaitCommEvent
+		char          tx_in_progress;                    // BOOL indicating if a WriteFile is
+		// in progress
+		char          rx_in_progress;                    // BOOL indicating if a ReadFile is
+		// in progress
+		char          WaitCommEventInProgress;
+		char          rxBuffer[SERIAL_MAX_RX];
+		int           max_rx_size;
+		int           received_size;
+		char          txBuffer[SERIAL_MAX_TX];
+		int           tx_size;
+		DWORD         dwCommEvent;                       // to store the result of the wait
 
-	type_myCallBack manager;
-	void		  *parent;
+		type_myCallBack manager;
+		void* parent;
 
-	// ............................................................
-	void          OnCharArrival(char c);
-	void          OnEvent(unsigned long events);
+		// ............................................................
+		void          OnCharArrival(char c);
+		void          OnEvent(unsigned long events);
 
 
-	// ++++++++++++++++++++++++++++++++++++++++++++++
-	// .................. EXTERNAL VIEW .............
-	// ++++++++++++++++++++++++++++++++++++++++++++++
-public:
-	void         *owner;                // do what you want with this
-	void          run(void);
-	Tserial_event();
-	~Tserial_event();
-	bool          connect(char *port_arg);
+		// ++++++++++++++++++++++++++++++++++++++++++++++
+		// .................. EXTERNAL VIEW .............
+		// ++++++++++++++++++++++++++++++++++++++++++++++
+	public:
+		void* owner;                // do what you want with this
+		void          run(void);
+		Tserial_event();
+		~Tserial_event();
+		bool          connect(char* port_arg);
 
-	void          setManager(type_myCallBack manager_arg, void* parent_class);
-	void          setRxSize(int size);
-	void          sendData(char *buffer, int size);
-	int           getNbrOfBytes(void);
-	int           getDataInSize(void);
-	char *        getDataInBuffer(void);
-	void          dataHasBeenRead(void);
-	void          disconnect(void);
-};
-/* -------------------------------------------------------------------- */
+		void          setManager(type_myCallBack manager_arg, void* parent_class);
+		void          setRxSize(int size);
+		void          sendData(char* buffer, int size);
+		int           getNbrOfBytes(void);
+		int           getDataInSize(void);
+		char* getDataInBuffer(void);
+		void          dataHasBeenRead(void);
+		void          disconnect(void);
+	};
+	/* -------------------------------------------------------------------- */
+
+}
 
 #endif TSERIAL_EVENT_H
 

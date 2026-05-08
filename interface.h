@@ -42,6 +42,8 @@ struct UnifiedConnectionStatus {
 
 class USB_Tester {
 public:
+    std::string port;
+
     virtual ~USB_Tester() = default;
 
     // Core Control
@@ -85,8 +87,8 @@ public:
 
     bool GetStats(UnifiedStats& stats) override {
         UCHAR temp;
-        UINT16 mVolt, mVoltSrc, sCurr, mCurr, mCurrSrc;
-        if (hw.GetStatistics(&temp, &mVolt, &mVoltSrc, &sCurr, &mCurr, &mCurrSrc)) {
+        UINT16 mVolt, mVoltSrc, sCurr, mCurr, lCurr;
+        if (hw.GetStatistics(&temp, &mVolt, &sCurr, &mCurr, &lCurr)) {
             stats.measuredVoltage_mV = mVolt;
             stats.measuredCurrent_mA = mCurr;
             return true;

@@ -10,8 +10,8 @@
 #include <windows.h> // Required for QueryDosDeviceA
 
 #include "interface.h"
-//#include "PDTesterAPI/PDTesterAPI.h"
-//#include "PDTesterProAPI/PDTesterPROAPI.h"
+#include "PDTesterAPI/PDTesterAPI.h"
+#include "PDTesterProAPI/PDTesterPROAPI.h"
 
 // --- Configuration Constants ---
 const uint16_t CURRENT_STEP_MA = 50;
@@ -50,7 +50,9 @@ std::vector<USB_Tester*> ScanForTesters() {
             USB_Tester* proTester = new PDTesterPro_Adapter();
 
             if (proTester->Connect(comName.c_str())) {
-                std::cout << "  -> [High-Power] PDTesterPro found and connected on " << comName << "\n";
+                std::cout << "  -> PDTesterPro [PM240] found on " << comName << "\n";
+                proTester->port = comName;
+                proTester->Disconnect();
                 foundTesters.push_back(proTester);
                 continue; // Move to the next COM port
             }
@@ -62,7 +64,9 @@ std::vector<USB_Tester*> ScanForTesters() {
             USB_Tester* standardTester = new PDTester_Adapter();
 
             if (standardTester->Connect(comName.c_str())) {
-                std::cout << "  -> [Low-Power] PDTester found and connected on " << comName << "\n";
+                std::cout << "  -> PDTester [PM125] found on " << comName << "\n";
+                standardTester->port = comName;
+                standardTester->Disconnect();
                 foundTesters.push_back(standardTester);
                 continue; // Move to the next COM port
             }
@@ -75,7 +79,7 @@ std::vector<USB_Tester*> ScanForTesters() {
     return foundTesters;
 }
 
-bool WaitForVoltageSettling(PDTester& tester, uint16_t targetVolt_mV) {
+bool WaitForVoltageSettling(USB_Tester* tester, uint16_t targetVolt_mV) {
     const uint16_t VOLTAGE_TOLERANCE_MV = 500; // Acceptable +/- range for target voltage
     const int SETTLE_TIMEOUT_MS = 5000; // Max time to wait for voltage to settle
     const int POLL_INTERVAL_MS = 100; // How often to poll the tester
@@ -85,19 +89,18 @@ bool WaitForVoltageSettling(PDTester& tester, uint16_t targetVolt_mV) {
 
     int readings = 0; // Required number of consecutive readings within tolerance
     while (true) {
-        UCHAR temp;
-        UINT16 measVolt, measVoltSrc, setCurr, measCurr, measCurrSrc;
+        UnifiedStats stats;
 
         // Poll the hardware
-        if (tester.GetStatistics(&temp, &measVolt, &measVoltSrc, &setCurr, &measCurr, &measCurrSrc)) {
-            if (std::abs((int)measVolt - (int)targetVolt_mV) <= VOLTAGE_TOLERANCE_MV) {
+        if (tester->GetStats(stats)) {
+            if (std::abs((int)stats.measuredVoltage_mV - (int)targetVolt_mV) <= VOLTAGE_TOLERANCE_MV) {
                 readings++;
             }
         }
 
         // Consider voltage settled if 3 consecutive readings are within tolerance
         if (readings >= 3) {
-            std::cout << "  -> Voltage settled at " << measVolt << "mV.\n";
+            std::cout << "  -> Voltage settled at " << stats.measuredVoltage_mV << "mV.\n";
             return true;
         }
 
@@ -113,35 +116,31 @@ bool WaitForVoltageSettling(PDTester& tester, uint16_t targetVolt_mV) {
     }
 }
 
-void RecoverFromOCP(PDTester& tester, uint16_t defaultVolt_mV) {
+void RecoverFromOCP(USB_Tester* tester, uint16_t defaultVolt_mV) {
     const uint8_t PORT = 0x01; // Set port to 0x01 for sink
     const uint16_t LATCH_TIME_MS = 3000;
     const int MAX_RETRY_ATTEMPTS = 3;
 
     // Drop the tester's load request back to 0 before we reboot the charger
-    tester.SetLoad(0, DIAL_SPEED_MS);
+    tester->SetLoad(0, DIAL_SPEED_MS);
 
     // Disconnect to clear the latch
-    tester.SetUsbConnection(PORT, false);
+    tester->SetUsbConnection(PORT, false);
     std::this_thread::sleep_for(std::chrono::milliseconds(LATCH_TIME_MS));
 
     // Reconnect to wake the DUT back up
-    tester.SetUsbConnection(PORT, true);
+    tester->SetUsbConnection(PORT, true);
     std::this_thread::sleep_for(std::chrono::milliseconds(LATCH_TIME_MS));
 
     // Attempt to restore DUT to working state
-    USB_ConnectionStatus_t port_status, src_port_status;
-    uint8_t profile_index, profile_subtype, src_profile_index, src_profile_subtype, src_type_index;
-    PROFILE_TypeDef profile, src_profile;
-    uint16_t voltage, max_current, src_voltage, src_max_current, src_req_current;
+    UnifiedConnectionStatus status;
 
     for (int i = 0; i < MAX_RETRY_ATTEMPTS; i++) {
-        tester.SetVoltage(0, defaultVolt_mV);
+        tester->SetVoltage(0, defaultVolt_mV);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        tester.GetConnectionStatus(&port_status, &profile_index, &profile, &profile_subtype, &voltage, &max_current,
-            &src_port_status, &src_profile_index, &src_profile, &src_profile_subtype, &src_voltage, &src_max_current, &src_req_current, &src_type_index);
+        tester->GetConnectionStatus(status);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        if (profile_index == 0) {
+        if (status.profile_index == 0) {
             std::cout << "  -> DUT reset...\n";
             return;
         }
@@ -153,7 +152,7 @@ void RecoverFromOCP(PDTester& tester, uint16_t defaultVolt_mV) {
 
 int main() {
     // 1. Scan for testers
-    std::vector<std::string> availableTesters = ScanForTesters();
+    std::vector<USB_Tester*> availableTesters = ScanForTesters();
     if (availableTesters.empty()) {
         std::cerr << "No Passmark testers found. Please check your USB connection.\n";
         return 1;
@@ -161,39 +160,45 @@ int main() {
 
     std::string selectedComPort;
     if (availableTesters.size() == 1) {
-        selectedComPort = availableTesters[0];
+        selectedComPort = availableTesters[0]->port;
         std::cout << "\nAuto-selecting " << selectedComPort << "\n";
     }
     else {
-        std::cout << "\nMultiple testers found. Please enter the COM port to use (e.g., COM3): ";
         std::getline(std::cin, selectedComPort);
         // Can add validation here to ensure user typed a valid port from the list
     }
 
     // 2. Connect the main tester object
-    PDTester tester;
     std::cout << "Connecting to " << selectedComPort << "...\n";
-    if (!tester.Connect(const_cast<char*>(selectedComPort.c_str()), PDEventCallback)) {
-        std::cerr << "Failed to connect to " << selectedComPort << ".\n";
-        return 1;
+    int tester_idx;
+    for (int i = 0; i < availableTesters.size(); i++) {
+        if (selectedComPort == availableTesters[i]->port) {
+            if (!availableTesters[i]->Connect(const_cast<char*>(selectedComPort.c_str()))) {
+                std::cerr << "Failed to connect to " << selectedComPort << ".\n";
+                return 1;
+            }
+            else {
+                tester_idx = i;
+                std::cout << "Connected successfully!\n\n";
+            }
+        }
     }
-    std::cout << "Connected successfully!\n\n";
 
     // 3. Get Capabilities
-    USBPD_Capabilities_TypeDef capabilities;
-    if (!tester.GetCapabilities(&capabilities)) {
+    UnifiedCapabilities capabilities;
+    if (!availableTesters[tester_idx]->GetCapabilities(capabilities)) {
         std::cerr << "Failed to read device capabilities.\n";
-        tester.Disconnect();
+        availableTesters[tester_idx]->Disconnect();
         return 1;
     }
 
     std::cout << "--- Available Power Profiles ---\n";
     for (int i = 0; i < capabilities.NumObjects; i++) {
-        uint16_t minVolt_mV = capabilities.Object[i].MinVoltage;
-        uint16_t maxVolt_mV = capabilities.Object[i].MaxVoltage;
-        uint16_t curr_mA = capabilities.Object[i].MaxCurrent;
+        uint16_t minVolt_mV = capabilities.Objects[i].MinVoltage;
+        uint16_t maxVolt_mV = capabilities.Objects[i].MaxVoltage;
+        uint16_t curr_mA = capabilities.Objects[i].MaxCurrent;
         std::cout << "[" << i + 1 << "] "
-            << profileType[capabilities.Object[i].Profile.Type * 6 + capabilities.Object[i].Profile.SubType]
+            << profileType[capabilities.Objects[i].ProfileType * 6 + capabilities.Objects[i].SubType]
             << ": ";
         if (minVolt_mV == maxVolt_mV) {
             std::cout << maxVolt_mV << "mV @ " << curr_mA << "mA\n";
@@ -245,7 +250,7 @@ int main() {
 
     if (!csvFile.is_open()) {
         std::cerr << "Error: Could not create the file " << fullPath << "\n";
-        tester.Disconnect();
+        availableTesters[tester_idx]->Disconnect();
         return 1;
     }
 
@@ -258,12 +263,12 @@ int main() {
         int actualIndex = index - 1;
 
         // Grab the boundaries for this specific profile
-        uint16_t minVolt_mV = capabilities.Object[actualIndex].MinVoltage;
-        uint16_t maxVolt_mV = capabilities.Object[actualIndex].MaxVoltage;
-        uint16_t maxCurr_mA = capabilities.Object[actualIndex].MaxCurrent;
+        uint16_t minVolt_mV = capabilities.Objects[actualIndex].MinVoltage;
+        uint16_t maxVolt_mV = capabilities.Objects[actualIndex].MaxVoltage;
+        uint16_t maxCurr_mA = capabilities.Objects[actualIndex].MaxCurrent;
 
         std::cout << "\n--- Testing Profile " << index << ": "
-            << profileType[capabilities.Object[actualIndex].Profile.Type * 6 + capabilities.Object[actualIndex].Profile.SubType];
+                  << profileType[capabilities.Objects[actualIndex].ProfileType * 6 + capabilities.Objects[actualIndex].SubType];
         if (minVolt_mV == maxVolt_mV) {
             std::cout << " (" << maxVolt_mV << "mV / " << maxCurr_mA << "mA max) ---\n";
         }
@@ -275,29 +280,32 @@ int main() {
             for (uint16_t load = 0; load <= finalCurr_mA; load += CURRENT_STEP_MA) {
                 // Skip redundant command if load is already at 0mA
                 if (load > 0) {
-                    tester.SetLoad(load, DIAL_SPEED_MS);
+                    availableTesters[tester_idx]->SetLoad(load, DIAL_SPEED_MS);
                 }
 
                 // Wait for stabilization
                 std::this_thread::sleep_for(std::chrono::milliseconds(DWELL_TIME_MS));
 
                 // Measure
-                UCHAR temp;
-                uint16_t measVolt, measVoltSrc, setCurr, measCurr, measCurrSrc;
-                if (tester.GetStatistics(&temp, &measVolt, &measVoltSrc, &setCurr, &measCurr, &measCurrSrc)) {
+                UnifiedStats stats;
+                if (availableTesters[tester_idx]->GetStats(stats)) {
 
                     // Print to console
-                    std::cout << "Load: " << load << "mA | Measured: " << measVolt << "mV, " << measCurr << "mA\n";
+                    std::cout << "Load: " << load << "mA | Measured: " 
+                              << stats.measuredVoltage_mV << "mV, " 
+                              << stats.measuredCurrent_mA << "mA\n";
 
                     // Write to CSV
-                    csvFile << index << "," << targetVolt_mV << "," << load << "," << measVolt << "," << measCurr << "\n";
+                    csvFile << index << "," << targetVolt_mV << "," << load << "," 
+                            << stats.measuredVoltage_mV << "," 
+                            << stats.measuredCurrent_mA << "\n";
 
                     // Check if OCP event occurred and exit loop if detected
-                    if (load > 0 && (measCurr < 5 || measVolt < 1000)) {
+                    if (load > 0 && (stats.measuredVoltage_mV < 5 || stats.measuredVoltage_mV < 1000)) {
                         std::cout << "  -> ERROR: OCP event detected!\n";
                         std::cout << "  -> Resetting DUT state machine...\n";
 
-                        RecoverFromOCP(tester, capabilities.Object[0].MaxVoltage);
+                        RecoverFromOCP(availableTesters[tester_idx], capabilities.Objects[0].MaxVoltage);
 
                         // Exit loop
                         break;
@@ -309,14 +317,14 @@ int main() {
             }
 
             // Reset load to zero before outer loop increments voltage
-            tester.SetLoad(0, DIAL_SPEED_MS);
+            availableTesters[tester_idx]->SetLoad(0, DIAL_SPEED_MS);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             };
 
         // Outer Loop: Step through the voltage range
         // For fixed profiles, minVolt_mV == maxVolt_mV, so this runs exactly once.
-        switch (capabilities.Object[actualIndex].Profile.Type * 6 + capabilities.Object[actualIndex].Profile.SubType) {
-        case (PROFILE_QC * 6 + SUBTYPE_QC3):
+        switch (capabilities.Objects[actualIndex].ProfileType * 6 + capabilities.Objects[actualIndex].SubType) {
+        case (Passmark_Pro::PROFILE_QC * 6 + Passmark_Pro::SUBTYPE_QC3):
         {
             std::vector<uint16_t> QC3_VOLTAGES_MV = { 5000, 9000, 12000 };
             // Check if DUT supports higher voltages, e.g., 20000mV
@@ -328,25 +336,22 @@ int main() {
                 std::cout << "\n  -> Requesting " << targetVolt_mV << "mV...\n";
 
                 // Request the specific voltage from the profile
-                tester.SetVoltage(actualIndex, targetVolt_mV);
+                availableTesters[tester_idx]->SetVoltage(actualIndex, targetVolt_mV);
 
                 // Ensure voltage is stable before continuing
-                bool isStable = WaitForVoltageSettling(tester, targetVolt_mV);
+                bool isStable = WaitForVoltageSettling(availableTesters[tester_idx], targetVolt_mV);
 
                 if (isStable) {
                     // Force max current limit to defined upper limits for QC3
                     uint16_t maxCurr_mA_adjusted = (targetVolt_mV == 5000) ? 3000 : (targetVolt_mV == 9000) ? 2000 : maxCurr_mA;
-                    tester.GetConfig();
                     if (maxCurr_mA_adjusted != maxCurr_mA) {
                         std::cout << "  -> Setting current limit to " << maxCurr_mA_adjusted << "mA...\n\n";
-                        tester.CurrentLimitType = FORCE_LIMIT;
-                        tester.MaxCurrent = maxCurr_mA_adjusted;
+                        availableTesters[tester_idx]->SetCurrentLimitEnforcement(true, maxCurr_mA_adjusted);
                     }
                     else {
                         std::cout << "  -> Restoring default current limit...\n\n";
-                        tester.CurrentLimitType = ENFORCE_LIMITS;
+                        availableTesters[tester_idx]->SetCurrentLimitEnforcement(false, maxCurr_mA_adjusted);
                     }
-                    tester.SetConfigVolatile();
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
                     // Inner Loop: Step the load at the current voltage
@@ -365,10 +370,10 @@ int main() {
                 std::cout << "\n  -> Requesting " << targetVolt_mV << "mV...\n";
 
                 // Request the specific voltage from the profile
-                tester.SetVoltage(actualIndex, targetVolt_mV);
+                availableTesters[tester_idx]->SetVoltage(actualIndex, targetVolt_mV);
 
                 // Ensure voltage is stable before continuing
-                bool isStable = WaitForVoltageSettling(tester, targetVolt_mV);
+                bool isStable = WaitForVoltageSettling(availableTesters[tester_idx], targetVolt_mV);
 
                 if (isStable) {
                     std::cout << "\n";
@@ -390,14 +395,14 @@ int main() {
 
         // Reset load to 0 before switching to the next profile
         std::cout << "Profile complete. Resetting load to 0mA...\n";
-        tester.SetLoad(0, DIAL_SPEED_MS);
+        availableTesters[tester_idx]->SetLoad(0, DIAL_SPEED_MS);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     }
 
     // 7. Teardown
     std::cout << "\nTest complete. Disconnecting...\n";
     csvFile.close();
-    tester.SetVoltage(0, capabilities.Object[0].MaxVoltage);
-    tester.Disconnect();
+    availableTesters[tester_idx]->SetVoltage(0, capabilities.Objects[0].MaxVoltage);
+    availableTesters[tester_idx]->Disconnect();
     return 0;
 }
