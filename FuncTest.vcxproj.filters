@@ -24,18 +24,12 @@
     <ClCompile Include="PDTesterProAPI\tserial_event_p.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PDTesterAPI\PDTesterAPI.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="PDTesterProAPI\PDTesterProAPI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PDTesterProAPI\tserial_event_p.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PDTesterAPI\ftd2xx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PDTesterAPI\PDTesterAPI.h">
@@ -45,6 +39,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="interface.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PDTesterAPI\D2XX\ftd2xx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

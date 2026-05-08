@@ -72,9 +72,7 @@
 
 #include <stdio.h>
 #include <windows.h>
-#include "FTD2XX.H"
-
-namespace Passmark {
+#include "D2XX\ftd2xx.h"
 
 #define SERIAL_PARITY_NONE 0
 #define SERIAL_PARITY_ODD  1
@@ -157,8 +155,6 @@ namespace Passmark {
 		void          disconnect(void);
 	};
 	/* -------------------------------------------------------------------- */
-
-}
 
 #endif TSERIAL_EVENT_H
 

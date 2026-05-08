@@ -161,5 +161,5 @@ namespace Passmark_Pro {
 
 }
 
-#endif TSERIAL_EVENT_H
+#endif TSERIAL_EVENT_P_H
 

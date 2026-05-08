@@ -70,6 +70,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LibraryPath>C:\Users\perryd\source\repos\FuncTest\PDTesterAPI\amd64;C:\Users\perryd\source\repos\FuncTest\PDTesterAPI\D2XX\Static\amd64;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -108,7 +111,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;FTD2XX_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>PDTesterAPI;PDTesterProAPI</AdditionalIncludeDirectories>
@@ -117,6 +120,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>ftd2xx.lib;PDTesterAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
@@ -142,13 +146,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="PDTesterAPI\PDTesterAPI.cpp" />
     <ClCompile Include="PDTesterProAPI\PDTesterProAPI.cpp" />
     <ClCompile Include="PDTesterProAPI\tserial_event_p.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="interface.h" />
-    <ClInclude Include="PDTesterAPI\ftd2xx.h" />
+    <ClInclude Include="PDTesterAPI\D2XX\ftd2xx.h" />
     <ClInclude Include="PDTesterAPI\PDTesterAPI.h" />
     <ClInclude Include="PDTesterAPI\tserial_event.h" />
     <ClInclude Include="PDTesterProAPI\PDTesterProAPI.h" />

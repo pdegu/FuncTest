@@ -64,7 +64,7 @@ public:
 
 class PDTester_Adapter : public USB_Tester {
 private:
-    Passmark::PDTester hw;
+    PDTester hw;
 
 public:
     bool Connect(const char* port) override {
@@ -97,7 +97,7 @@ public:
     }
 
     bool GetCapabilities(UnifiedCapabilities& caps) override {
-        Passmark::USBPD_Capabilities_TypeDef rawCaps;
+        USBPD_Capabilities_TypeDef rawCaps;
         if (!hw.GetCapabilities(&rawCaps)) return false;
 
         caps.NumObjects = rawCaps.NumObjects;
@@ -115,9 +115,9 @@ public:
     }
 
     bool GetConnectionStatus(UnifiedConnectionStatus& status) override {
-        Passmark::USB_ConnectionStatus_t p_status;
+        USB_ConnectionStatus_t p_status;
         uint8_t p_idx, p_sub;
-        Passmark::PROFILE_TypeDef prof;
+        PROFILE_TypeDef prof;
         uint16_t v, mc;
         uint32_t mp;
 
@@ -132,11 +132,11 @@ public:
     void SetCurrentLimitEnforcement(bool forceLimit, uint16_t maxCurr_mA) override {
         hw.GetConfig();
         if (forceLimit) {
-            hw.CurrentLimitType = Passmark::FORCE_LIMIT;
+            hw.CurrentLimitType = FORCE_LIMIT;
             hw.MaxCurrent = maxCurr_mA;
         }
         else {
-            hw.CurrentLimitType = Passmark::ENFORCE_LIMITS;
+            hw.CurrentLimitType = ENFORCE_LIMITS;
         }
         hw.SetConfig();
     }

@@ -7,8 +7,6 @@
 
 // API v1.6
 
-namespace Passmark {
-
 #define USBPD_SERIAL_PREFIX		"PMPD"
 
 #define MAX_NUM_TESTERS			32
@@ -316,7 +314,5 @@ namespace Passmark {
 		static PDMsg ParsePDData(UINT8* pd_data);
 	};
 	/* -------------------------------------------------------------------- */
-
-}
 
 #endif PASSMARK_PDTESTER_H
