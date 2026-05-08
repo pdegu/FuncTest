@@ -9,7 +9,9 @@
 #include <iomanip>
 #include <windows.h> // Required for QueryDosDeviceA
 
-#include "PDTesterAPI.h"
+#include "interface.h"
+//#include "PDTesterAPI/PDTesterAPI.h"
+//#include "PDTesterProAPI/PDTesterPROAPI.h"
 
 // --- Configuration Constants ---
 const uint16_t CURRENT_STEP_MA = 50;
@@ -29,36 +31,48 @@ void PDEventCallback(int EventCode) {
     // We could log connection/disconnection events here if needed
 }
 
-std::vector<std::string> ScanForTesters() {
-    std::vector<std::string> validPorts;
-    char targetPath[255]; // Buffer to hold the hardware path from Windows
+std::vector<USB_Tester*> ScanForTesters() {
+    std::vector<USB_Tester*> foundTesters;
+    char targetPath[255];
 
-    std::cout << "Scanning for connected Passmark testers...\n";
+    std::cout << "Scanning all COM ports for Passmark testers...\n";
 
-    // Loop through all possible Windows COM ports
     for (int i = 1; i < 256; i++) {
         std::string comName = "COM" + std::to_string(i);
 
-        // QueryDosDeviceA quickly checks if the COM port exists in the Windows registry
+        // QueryDosDeviceA quickly checks if the COM port exists in Windows
         DWORD res = QueryDosDeviceA(comName.c_str(), targetPath, sizeof(targetPath));
 
         if (res != 0) {
-            // The port exists! Let's ping it to see if it's our tester.
-            PDTester tempTester;
+            // The port exists! Let's probe it.
 
-            // Connect() automatically verifies the hardware by requesting device info
-            if (tempTester.Connect(const_cast<char*>(comName.c_str()), PDEventCallback)) {
-                std::cout << "  -> Found tester on " << comName
-                    << " (FW: " << (int)tempTester.FW_Ver_major << "."
-                    << (int)tempTester.FW_Ver_minor << ")\n";
+            // --- 1. Probe for High-Power Device (PDTesterPro) ---
+            USB_Tester* proTester = new PDTesterPro_Adapter();
 
-                validPorts.push_back(comName);
-                tempTester.Disconnect(); // Free the port so the main script can use it
+            if (proTester->Connect(comName.c_str())) {
+                std::cout << "  -> [High-Power] PDTesterPro found and connected on " << comName << "\n";
+                foundTesters.push_back(proTester);
+                continue; // Move to the next COM port
             }
+
+            // If it failed, delete the object from memory so we don't cause a memory leak
+            delete proTester;
+
+            // --- 2. Probe for Low-Power Device (PDTester) ---
+            USB_Tester* standardTester = new PDTester_Adapter();
+
+            if (standardTester->Connect(comName.c_str())) {
+                std::cout << "  -> [Low-Power] PDTester found and connected on " << comName << "\n";
+                foundTesters.push_back(standardTester);
+                continue; // Move to the next COM port
+            }
+
+            // If neither API worked, it's just some other USB device (like a mouse or Arduino).
+            delete standardTester;
         }
     }
 
-    return validPorts;
+    return foundTesters;
 }
 
 bool WaitForVoltageSettling(PDTester& tester, uint16_t targetVolt_mV) {

@@ -67,12 +67,11 @@
 -- ------------------------------------------------------------------------ */
 
 
-#ifndef TSERIAL_EVENT_H
-#define TSERIAL_EVENT_H
+#ifndef TSERIAL_EVENT_P_H
+#define TSERIAL_EVENT_P_H
 
 #include <stdio.h>
 #include <windows.h>
-#include "FTD2XX.H"
 
 
 #define SERIAL_PARITY_NONE 0
@@ -88,7 +87,7 @@
 #define SERIAL_CD_OFF            6
 
 typedef unsigned long uint32;
-typedef void(*type_myCallBack) (void *object, void *parent, uint32 event);
+typedef void(*type_myCallBack) (void* object, void *parent, uint32 event);
 
 
 #define SERIAL_SIGNAL_NBR 7         // number of events in the thread
@@ -105,13 +104,13 @@ class Tserial_event
 protected:
 	bool          ready;
 	bool          check_modem;
-	wchar_t       port[20];                          // port name "com1",...
+	wchar_t       port[10];                          // port name "com1",...
 	int           rate;                              // baudrate
 	int           parityMode;
 
 	HANDLE        serial_events[SERIAL_SIGNAL_NBR];  // events to wait on
 	unsigned int  threadid;                          // ...
-	FT_HANDLE     serial_handle;                     // ...
+	HANDLE        serial_handle;                     // ...
 	HANDLE        thread_handle;                     // ...
 	OVERLAPPED    ovReader;                          // Overlapped structure for ReadFile
 	OVERLAPPED    ovWriter;                          // Overlapped structure for WriteFile
@@ -144,8 +143,10 @@ public:
 	void          run(void);
 	Tserial_event();
 	~Tserial_event();
-	bool          connect(char *port_arg);
+	int           connect(wchar_t *port, int rate, int parity,
+		char ByteSize, bool modem_events);
 
+	//void          Tserial_event::setManager(type_myCallBack manager_arg, void* parent_class);
 	void          setManager(type_myCallBack manager_arg, void* parent_class);
 	void          setRxSize(int size);
 	void          sendData(char *buffer, int size);

@@ -80,7 +80,7 @@
 #include <windows.h>
 
 
-#include "Tserial_event.h"
+#include "Tserial_event_p.h"
 
 extern void AddLogEntry(wchar_t *line, int MessType);
 

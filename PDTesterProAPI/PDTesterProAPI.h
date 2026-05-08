@@ -1,20 +1,26 @@
-#ifndef PASSMARK_PDTESTER_H
-#define PASSMARK_PDTESTER_H
+#ifndef PASSMARK_PDTESTERPRO_H
+#define PASSMARK_PDTESTERPRO_H
 
 #include <stdio.h>
 #include <windows.h>
-#include "tserial_event.h"
+#include "tserial_event_p.h"
 
-// API v1.6
+// API v1.8
 
-namespace Passmark {
+// Change log
 
-#define USBPD_SERIAL_PREFIX		"PMPD"
+// V1.7
+// - Changed LATEST_FW to 24
+
+// V1.8
+// - Added Source Port Override Voltage command
+
+namespace Passmark_Pro {
 
 #define MAX_NUM_TESTERS			32
 #define MAX_SERIAL_LENGTH		16
 #define USBPD_MAX_NB_PDO        (7U)              /*!< Maximum number of supported Power Data Objects: fix by the Specification */
-#define MAX_PROFILES			14
+#define MAX_PROFILES			24
 
 #define COM_PACKET_ARRIVED		0
 #define COM_PACKET_SENT			1
@@ -24,6 +30,9 @@ namespace Passmark {
 #define PDAPI_EVENT_PORT_DETACHED		2
 #define PDAPI_EVENT_PROFILE_CHANGED		3
 #define PDAPI_EVENT_NEW_CAPABILITY		4
+#define PDAPI_EVENT_SRC_PORT_ATTACHED	5
+#define PDAPI_EVENT_SRC_PORT_DETACHED	6
+#define PDAPI_EVENT_SRC_PROFILE_CHANGED	7
 
 	typedef void(*type_EventCallBack) (int EventCode);
 
@@ -35,12 +44,14 @@ namespace Passmark {
 
 	typedef enum
 	{
-		PROFILE_LEGACY = 0,
+		PROFILE_UNKNOWN = 0,
+		PROFILE_LEGACY,
 		PROFILE_PTY,
 		PROFILE_BC,
 		PROFILE_QC,
 		PROFILE_UC,
-		PROFILE_PD
+		PROFILE_PD,
+		PROFILE_EPR
 	}PROFILE_TypeDef;
 
 #define SUBTYPE_USB_DEFAULT		0
@@ -79,8 +90,7 @@ namespace Passmark {
 		SUBTYPE_PTY_APPLE_0_5A = 0,
 		SUBTYPE_PTY_APPLE_1A,
 		SUBTYPE_PTY_APPLE_2_1A,
-		SUBTYPE_PTY_APPLE_2_4A,
-		SUBTYPE_PTY_APPLE_3_0A,
+		SUBTYPE_PTY_APPLE_2_4A
 	};
 
 
@@ -89,9 +99,8 @@ namespace Passmark {
 	typedef struct ProfileInfo {
 		UINT16 Index : 4;
 		UINT16 Type : 4;
-		UINT16 SubType : 3;
+		UINT16 SubType : 4;
 		UINT16 PDOIndex : 4;
-		UINT16 bSelectable : 1;
 	}ProfileInfo_TypeDef;
 
 	typedef struct
@@ -113,7 +122,6 @@ namespace Passmark {
 	{
 		BYTE	NumObjects;
 		USBPD_Object_TypeDef Object[MAX_PROFILES];
-		UINT16 objExtraDataField[MAX_PROFILES]; // Added this to solve issue of AVS having 2 current limits
 	}USBPD_Capabilities_TypeDef;
 
 	// PDMsgType number structure
@@ -211,8 +219,10 @@ namespace Passmark {
 
 	typedef enum
 	{
-		CALIB_INDEX_VBUS,
-		CALIB_INDEX_IBUS
+		CALIB_INDEX_SRC_VBUS,
+		CALIB_INDEX_SRC_IBUS,
+		CALIB_INDEX_SINK_VBUS,
+		CALIB_INDEX_SINK_IBUS
 	}CalibrationChannel_t;
 
 
@@ -228,7 +238,7 @@ namespace Passmark {
 		// In PD Analyzer mode is increased to account for the delay it creates
 		unsigned int TIME_OUT_MS = 500;
 
-		BOOL	GetDevInfo(UCHAR* HW_Ver, UCHAR* SW_Ver);
+		BOOL	GetDevInfo();
 
 		// -------------------------------------------------------- //
 	protected:
@@ -248,19 +258,27 @@ namespace Passmark {
 		// .................. EXTERNAL VIEW .............
 		// ++++++++++++++++++++++++++++++++++++++++++++++
 	public:
-		const static UCHAR LATEST_FW_REV1 = 32;
-		const static UCHAR LATEST_FW_REV2 = 46;
+		const static UCHAR LATEST_FW = 25;
 
-		UCHAR	HW_Ver;		// 10 = PM110, 20 = PM125
-		UCHAR	HW_SubVer;	// 2x = PM125 hardware rev 2.x
+		BOOL	bConnected;
+		UCHAR	HW_Ver;
+		UCHAR	HW_SubVer;
 		UCHAR	HW_SubRevNumber;
 		UCHAR	FW_Ver;
+		UCHAR	FW_Ver_major;
+		UCHAR	FW_Ver_minor;
+		UCHAR	FW_Ver_patch;
+		UCHAR	FW_Ver_build;
+		UCHAR	DeviceID[12];
 		bool	bLoopbackPortEnabled;
 		bool	bEstimatePortVoltage;
 		WORD	MaxSDPCurrent;
+		WORD	MaxUSBCCurrent;
 		CurrentLimit_t CurrentLimitType;
 		WORD	MaxCurrent;
 		WORD	CableResistance;
+		WORD	DialLoadSpeedms = 200;
+		UCHAR	ApplyDefaultOnSrcCap = 0x00;
 		UCHAR	DefaultProfileIndex = 0xFF;
 		WORD	DefaultVoltage = 5000;
 		WORD	DefaultLoad = 0;
@@ -269,17 +287,11 @@ namespace Passmark {
 		WORD	SinkCapMA = 0xFFFF;
 		bool	bHoldLoadOnVChange = false;
 
-		WORD	ProfilePDLimit = 5000;
-		WORD	ProfileUCLimit = 3000;
-		WORD	ProfileBCLimit = 1500;
-		WORD	ProfileQC5Limit = 1500;
-		WORD	ProfileQC9Limit = 1500;
-		WORD	ProfileQC12Limit = 1500;
-		WORD	ProfileQC20Limit = 1500;
-		WORD	ProfileAppleLimit = 0xFFFF;
-		WORD	ProfileSamsung2ALimit = 0xFFFF;
-		bool	bPPSEnabled = true;
-		bool	bApplyDefaultConfigOnCap = false;
+		UCHAR	ProfilePDLimit = 0xFF;
+		UCHAR	ProfileEPRLimit = 0xFF;
+		UCHAR	ProfileBCLimit = 0xFF;
+		UCHAR	ProfileQCLimit = 0xFF;
+		bool	bPPSEnabled = true; // Not used anymore
 		bool	bDefaultConfigFailOnVolt = false;
 		bool	bDefaultConfigFailOnCurr = false;
 
@@ -287,31 +299,31 @@ namespace Passmark {
 		PDTester();
 		~PDTester();
 		void	onSerialEvent(void* object, uint32 event);
-		int		GetConnectedDevices(char* devices[MAX_NUM_TESTERS]);
 		BOOL	Connect(char* port, type_EventCallBack event_callback);
-		BOOL	IsLatestFirmware(void);
-		BOOL	GetSubRev(void);
 		BOOL	GetConfig(void);
-		BOOL	SetConfig(void);
-		BOOL	isConfigSupported(void* config_option);
-		BOOL	GetConnectionStatus(USB_ConnectionStatus_t* port_status, BYTE* profile_index, PROFILE_TypeDef* profile, BYTE* profile_subtype, UINT16* voltage, UINT16* max_current, UINT32* max_power);
+		BOOL	SetConfigPersistent(void);
+		BOOL	SetConfigVolatile(void);
+		BOOL	GetConnectionStatus(USB_ConnectionStatus_t* port_status, BYTE* profile_index, PROFILE_TypeDef* profile, BYTE* profile_subtype, UINT16* voltage, UINT16* max_current, USB_ConnectionStatus_t* src_port_status, BYTE* src_profile_index, PROFILE_TypeDef* src_profile, BYTE* src_profile_subtype, UINT16* src_voltage, UINT16* src_max_current, UINT16* src_req_current, BYTE* src_type_index);
 		BOOL	GetCapabilities(USBPD_Capabilities_TypeDef* SourceCapabilities);
-		BOOL	GetStatistics(UCHAR* temp, UINT16* voltage, UINT16* set_current, UINT16* current, UINT16* loopback_current);
+		BOOL	GetStatistics(UCHAR* temp, UINT16* voltage, UINT16* voltage_src, UINT16* set_current, UINT16* current, UINT16* current_src);
 		BOOL	SetVoltage(UCHAR index, UINT16 voltage);
-		BOOL	SetLoad(UINT16 set_current);
-		BOOL	SetLoadFast(UINT16 set_current, UINT16 slope);
-		BOOL	SetDefaultVoltage(UINT16 voltage_mv);
-		BOOL	SetDefaultLoad(UINT16 current_ma);
-		BOOL	GetStepResponse(UINT16 start_current, UINT16 end_current, UINT16* voltages, UINT8* sample_time_us);
+		BOOL	SetLoad(UINT16 set_current, UINT16 load_speed_ms);
 		BOOL	GetCalibrationData(CalibrationChannel_t channel, BOOL* isCalibrated, int* year, int* month, int* applied1, int* measured1, int* applied2, int* measured2);
 		BOOL	SetCalibrationData(CalibrationChannel_t channel, int year, int month, int applied1, int measured1, int applied2, int measured2);
 		BOOL	ResetCalibrationData(CalibrationChannel_t channel);
-		BOOL	SetUsbConnection(bool isConnected);
-		BOOL	InjectPDMsg(PDMsgType_t type, UINT8* data, unsigned int dataLen);
-		BOOL	InjectPDMsgRaw(UINT8* rawMsg, unsigned int numBytes);
+		BOOL	SetUsbConnection(UINT8 port, bool isConnected);
 		BOOL	StartPDAnalyzer(void (*callback)(UINT8* msgRaw));
 		BOOL	StopPDAnalyzer(void);
 		void	Disconnect();
+		BOOL	GetSrcConfig(UINT8 SrcType, UINT8* SrcTypeName, UINT8* USBCSubType, UINT8* BCSubType, UINT8* AppleSubType,
+			UINT8* PDNumProfiles, UINT8* PDSubType, UINT16* PDMinmV, UINT16* PDMaxmV, UINT16* PDMaxmA);
+		BOOL	SetSrcConfig(UINT8 SrcType, UINT8* SrcTypeName, UINT8* USBCSubType, UINT8* BCSubType, UINT8* AppleSubType,
+			UINT8* PDNumProfiles, UINT8* PDSubType, UINT16* PDMinmV, UINT16* PDMaxmV, UINT16* PDMaxmA);
+		BOOL	GetSrcTypes(UINT8* SrcType, UINT8* SrcType1Name, UINT8* SrcType2Name, UINT8* SrcType3Name, UINT8* SrcType4Name, UINT8* SrcType5Name);
+		BOOL	SelectSrcType(UINT8 SrcType);
+		BOOL	SetSrcOverrideMV(UINT16 mV);
+		BOOL	RunFFT(bool enable);
+		BOOL	GetFFT(INT16* FFT_Amplitudes);
 
 		static PDMsg ParsePDData(UINT8* pd_data);
 	};

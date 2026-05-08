@@ -111,7 +111,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>PDTesterAPI</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>PDTesterAPI;PDTesterProAPI</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -143,11 +143,16 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PDTesterAPI\PDTesterAPI.cpp" />
-    <ClCompile Include="PDTesterAPI\tserial_event.cpp" />
+    <ClCompile Include="PDTesterProAPI\PDTesterProAPI.cpp" />
+    <ClCompile Include="PDTesterProAPI\tserial_event_p.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="interface.h" />
+    <ClInclude Include="PDTesterAPI\ftd2xx.h" />
     <ClInclude Include="PDTesterAPI\PDTesterAPI.h" />
     <ClInclude Include="PDTesterAPI\tserial_event.h" />
+    <ClInclude Include="PDTesterProAPI\PDTesterProAPI.h" />
+    <ClInclude Include="PDTesterProAPI\tserial_event_p.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
