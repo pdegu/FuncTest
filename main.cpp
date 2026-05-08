@@ -19,13 +19,6 @@ const uint16_t DWELL_TIME_MS = 1000;
 const uint16_t DIAL_SPEED_MS = 100; // How fast the hardware transitions to the new load
 const uint16_t VOLTAGE_STEP_MV = 1000; // Step variable profiles by 1V
 
-const char* profileType[] = { "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "LEGACY", "UNKNOWN",
-                              "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "APPLE", "APPLE", "APPLE", "APPLE", "APPLE",
-                              "SAMSUNG", "BC-SDP", "BC-CDP", "BC-DCP", "UNKNOWN", "UNKNOWN", "UNKNOWN", "QC1", "QC2",
-                              "QC3", "UNKNOWN", "UNKNOWN", "UNKNOWN", "USBC", "USBC", "USBC", "UNKNOWN", "UNKNOWN",
-                              "UNKNOWN", "PD-FIX", "PD-BAT", "PD-VAR", "PD-PPS", "PD-AVS", "UNKNOWN", "EPR-FIX", "EPR-BAT",
-                              "EPR-CAR", "EPR-AVS", "UNKNOWN", "UNKNOWN" };
-
 // Required event callback for the tester (can be left mostly empty for this script)
 void PDEventCallback(int EventCode) {
     // We could log connection/disconnection events here if needed
@@ -33,10 +26,46 @@ void PDEventCallback(int EventCode) {
 
 std::vector<USB_Tester*> ScanForTesters() {
     std::vector<USB_Tester*> foundTesters;
+
+    std::cout << "Scanning for Passmark testers...\n";
+
+    // --- 1. Scan for Low-Power Devices (PM125 / FTDI) ---
+    // The standard API uses FTDI serial numbers instead of Windows COM ports.
+    PDTester ftdiScanner;
+    char* ftdiDevices[MAX_NUM_TESTERS];
+
+    // Allocate memory buffers for the API to write the serial numbers into
+    for (int i = 0; i < MAX_NUM_TESTERS; i++) {
+        ftdiDevices[i] = new char[MAX_SERIAL_LENGTH + 1];
+    }
+
+    // Ask the API to find all connected FTDI testers
+    int numFtdiFound = ftdiScanner.GetConnectedDevices(ftdiDevices);
+
+    for (int i = 0; i < numFtdiFound; i++) {
+        USB_Tester* standardTester = new PDTester_Adapter();
+
+        // Connect using the FTDI serial number rather than a COM port string
+        if (standardTester->Connect(ftdiDevices[i])) {
+            std::cout << "  -> PDTester [PM125] found (Serial: " << ftdiDevices[i] << ")\n";
+            standardTester->port = ftdiDevices[i];
+            standardTester->Disconnect(); // Disconnect so main can claim it later
+            foundTesters.push_back(standardTester);
+        }
+        else {
+            delete standardTester;
+        }
+    }
+
+    // Safely clean up the FTDI character buffers
+    for (int i = 0; i < MAX_NUM_TESTERS; i++) {
+        delete[] ftdiDevices[i];
+    }
+
+
+    // --- 2. Scan for High-Power Devices (PM240 / COM Ports) ---
+    // The Pro API uses standard Windows COM ports.
     char targetPath[255];
-
-    std::cout << "Scanning all COM ports for Passmark testers...\n";
-
     for (int i = 1; i < 256; i++) {
         std::string comName = "COM" + std::to_string(i);
 
@@ -44,9 +73,6 @@ std::vector<USB_Tester*> ScanForTesters() {
         DWORD res = QueryDosDeviceA(comName.c_str(), targetPath, sizeof(targetPath));
 
         if (res != 0) {
-            // The port exists! Let's probe it.
-
-            // --- 1. Probe for High-Power Device (PDTesterPro) ---
             USB_Tester* proTester = new PDTesterPro_Adapter();
 
             if (proTester->Connect(comName.c_str())) {
@@ -54,25 +80,10 @@ std::vector<USB_Tester*> ScanForTesters() {
                 proTester->port = comName;
                 proTester->Disconnect();
                 foundTesters.push_back(proTester);
-                continue; // Move to the next COM port
             }
-
-            // If it failed, delete the object from memory so we don't cause a memory leak
-            delete proTester;
-
-            // --- 2. Probe for Low-Power Device (PDTester) ---
-            USB_Tester* standardTester = new PDTester_Adapter();
-
-            if (standardTester->Connect(comName.c_str())) {
-                std::cout << "  -> PDTester [PM125] found on " << comName << "\n";
-                standardTester->port = comName;
-                standardTester->Disconnect();
-                foundTesters.push_back(standardTester);
-                continue; // Move to the next COM port
+            else {
+                delete proTester;
             }
-
-            // If neither API worked, it's just some other USB device (like a mouse or Arduino).
-            delete standardTester;
         }
     }
 
@@ -158,37 +169,56 @@ int main() {
         return 1;
     }
 
+    USB_Tester* activeTester = nullptr; // dedicated pointer for chosen device
+
     std::string selectedComPort;
     if (availableTesters.size() == 1) {
         selectedComPort = availableTesters[0]->port;
         std::cout << "\nAuto-selecting " << selectedComPort << "\n";
     }
     else {
+        std::cout << "\nMultiple testers found. Please enter the serial number to use for PDTester or COM port to use for PDTesterPro" 
+                  << "(e.g., PMPD6DAL1O, COM3) : ";
         std::getline(std::cin, selectedComPort);
         // Can add validation here to ensure user typed a valid port from the list
     }
 
     // 2. Connect the main tester object
     std::cout << "Connecting to " << selectedComPort << "...\n";
-    int tester_idx;
+    
     for (int i = 0; i < availableTesters.size(); i++) {
         if (selectedComPort == availableTesters[i]->port) {
-            if (!availableTesters[i]->Connect(const_cast<char*>(selectedComPort.c_str()))) {
-                std::cerr << "Failed to connect to " << selectedComPort << ".\n";
-                return 1;
-            }
-            else {
-                tester_idx = i;
-                std::cout << "Connected successfully!\n\n";
-            }
+            activeTester = availableTesters[i];
+            availableTesters[i] = nullptr;
+            break;
         }
+    }
+
+    for (int i = 0; i < availableTesters.size(); i++) {
+        if (availableTesters[i] != nullptr) {
+            delete availableTesters[i];
+        }
+    }
+    availableTesters.clear();
+
+    if (activeTester != nullptr) {
+        if (!activeTester->Connect(const_cast<char*>(selectedComPort.c_str()))) {
+            std::cerr << "Failed to connect to " << selectedComPort << ".\n";
+            delete activeTester;
+            return 1;
+        }
+        std::cout << "Connected successfully!\n\n";
+    }
+    else {
+        std::cerr << "Error: Could not find tester matching " << selectedComPort << ".\n";
+        return 1;
     }
 
     // 3. Get Capabilities
     UnifiedCapabilities capabilities;
-    if (!availableTesters[tester_idx]->GetCapabilities(capabilities)) {
+    if (!activeTester->GetCapabilities(capabilities)) {
         std::cerr << "Failed to read device capabilities.\n";
-        availableTesters[tester_idx]->Disconnect();
+        activeTester->Disconnect();
         return 1;
     }
 
@@ -197,9 +227,8 @@ int main() {
         uint16_t minVolt_mV = capabilities.Objects[i].MinVoltage;
         uint16_t maxVolt_mV = capabilities.Objects[i].MaxVoltage;
         uint16_t curr_mA = capabilities.Objects[i].MaxCurrent;
-        std::cout << "[" << i + 1 << "] "
-            << profileType[capabilities.Objects[i].ProfileType * 6 + capabilities.Objects[i].SubType]
-            << ": ";
+        int type = capabilities.Objects[i].ProfileType * 6 + capabilities.Objects[i].SubType;
+        std::cout << "[" << i + 1 << "] " << activeTester->GetProfileTypeName(type) << ": ";
         if (minVolt_mV == maxVolt_mV) {
             std::cout << maxVolt_mV << "mV @ " << curr_mA << "mA\n";
         }
@@ -250,7 +279,7 @@ int main() {
 
     if (!csvFile.is_open()) {
         std::cerr << "Error: Could not create the file " << fullPath << "\n";
-        availableTesters[tester_idx]->Disconnect();
+        activeTester->Disconnect();
         return 1;
     }
 
@@ -267,8 +296,11 @@ int main() {
         uint16_t maxVolt_mV = capabilities.Objects[actualIndex].MaxVoltage;
         uint16_t maxCurr_mA = capabilities.Objects[actualIndex].MaxCurrent;
 
+        int type = capabilities.Objects[actualIndex].ProfileType * 6 + capabilities.Objects[actualIndex].SubType;
+        const char* profileTypeName = activeTester->GetProfileTypeName(type);
+
         std::cout << "\n--- Testing Profile " << index << ": "
-                  << profileType[capabilities.Objects[actualIndex].ProfileType * 6 + capabilities.Objects[actualIndex].SubType];
+                  << profileTypeName;
         if (minVolt_mV == maxVolt_mV) {
             std::cout << " (" << maxVolt_mV << "mV / " << maxCurr_mA << "mA max) ---\n";
         }
@@ -280,7 +312,7 @@ int main() {
             for (uint16_t load = 0; load <= finalCurr_mA; load += CURRENT_STEP_MA) {
                 // Skip redundant command if load is already at 0mA
                 if (load > 0) {
-                    availableTesters[tester_idx]->SetLoad(load, DIAL_SPEED_MS);
+                    activeTester->SetLoad(load, DIAL_SPEED_MS);
                 }
 
                 // Wait for stabilization
@@ -288,7 +320,7 @@ int main() {
 
                 // Measure
                 UnifiedStats stats;
-                if (availableTesters[tester_idx]->GetStats(stats)) {
+                if (activeTester->GetStats(stats)) {
 
                     // Print to console
                     std::cout << "Load: " << load << "mA | Measured: " 
@@ -305,7 +337,7 @@ int main() {
                         std::cout << "  -> ERROR: OCP event detected!\n";
                         std::cout << "  -> Resetting DUT state machine...\n";
 
-                        RecoverFromOCP(availableTesters[tester_idx], capabilities.Objects[0].MaxVoltage);
+                        RecoverFromOCP(activeTester, capabilities.Objects[0].MaxVoltage);
 
                         // Exit loop
                         break;
@@ -317,15 +349,13 @@ int main() {
             }
 
             // Reset load to zero before outer loop increments voltage
-            availableTesters[tester_idx]->SetLoad(0, DIAL_SPEED_MS);
+            activeTester->SetLoad(0, DIAL_SPEED_MS);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             };
 
         // Outer Loop: Step through the voltage range
         // For fixed profiles, minVolt_mV == maxVolt_mV, so this runs exactly once.
-        switch (capabilities.Objects[actualIndex].ProfileType * 6 + capabilities.Objects[actualIndex].SubType) {
-        case (Passmark_Pro::PROFILE_QC * 6 + Passmark_Pro::SUBTYPE_QC3):
-        {
+        if (profileTypeName == "QC3") {
             std::vector<uint16_t> QC3_VOLTAGES_MV = { 5000, 9000, 12000 };
             // Check if DUT supports higher voltages, e.g., 20000mV
             if (QC3_VOLTAGES_MV.back() < maxVolt_mV) {
@@ -336,21 +366,21 @@ int main() {
                 std::cout << "\n  -> Requesting " << targetVolt_mV << "mV...\n";
 
                 // Request the specific voltage from the profile
-                availableTesters[tester_idx]->SetVoltage(actualIndex, targetVolt_mV);
+                activeTester->SetVoltage(actualIndex, targetVolt_mV);
 
                 // Ensure voltage is stable before continuing
-                bool isStable = WaitForVoltageSettling(availableTesters[tester_idx], targetVolt_mV);
+                bool isStable = WaitForVoltageSettling(activeTester, targetVolt_mV);
 
                 if (isStable) {
                     // Force max current limit to defined upper limits for QC3
                     uint16_t maxCurr_mA_adjusted = (targetVolt_mV == 5000) ? 3000 : (targetVolt_mV == 9000) ? 2000 : maxCurr_mA;
                     if (maxCurr_mA_adjusted != maxCurr_mA) {
                         std::cout << "  -> Setting current limit to " << maxCurr_mA_adjusted << "mA...\n\n";
-                        availableTesters[tester_idx]->SetCurrentLimitEnforcement(true, maxCurr_mA_adjusted);
+                        activeTester->SetCurrentLimitEnforcement(true, maxCurr_mA_adjusted);
                     }
                     else {
                         std::cout << "  -> Restoring default current limit...\n\n";
-                        availableTesters[tester_idx]->SetCurrentLimitEnforcement(false, maxCurr_mA_adjusted);
+                        activeTester->SetCurrentLimitEnforcement(false, maxCurr_mA_adjusted);
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -364,16 +394,16 @@ int main() {
             }
             break;
         }
-        default:
+        else {
             for (uint16_t targetVolt_mV = minVolt_mV; targetVolt_mV <= maxVolt_mV; targetVolt_mV += VOLTAGE_STEP_MV) {
 
                 std::cout << "\n  -> Requesting " << targetVolt_mV << "mV...\n";
 
                 // Request the specific voltage from the profile
-                availableTesters[tester_idx]->SetVoltage(actualIndex, targetVolt_mV);
+                activeTester->SetVoltage(actualIndex, targetVolt_mV);
 
                 // Ensure voltage is stable before continuing
-                bool isStable = WaitForVoltageSettling(availableTesters[tester_idx], targetVolt_mV);
+                bool isStable = WaitForVoltageSettling(activeTester, targetVolt_mV);
 
                 if (isStable) {
                     std::cout << "\n";
@@ -395,14 +425,14 @@ int main() {
 
         // Reset load to 0 before switching to the next profile
         std::cout << "Profile complete. Resetting load to 0mA...\n";
-        availableTesters[tester_idx]->SetLoad(0, DIAL_SPEED_MS);
+        activeTester->SetLoad(0, DIAL_SPEED_MS);
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     }
 
     // 7. Teardown
     std::cout << "\nTest complete. Disconnecting...\n";
     csvFile.close();
-    availableTesters[tester_idx]->SetVoltage(0, capabilities.Objects[0].MaxVoltage);
-    availableTesters[tester_idx]->Disconnect();
+    activeTester->SetVoltage(0, capabilities.Objects[0].MaxVoltage);
+    activeTester->Disconnect();
     return 0;
 }

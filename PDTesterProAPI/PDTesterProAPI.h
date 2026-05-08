@@ -331,4 +331,4 @@ namespace Passmark_Pro {
 
 }
 
-#endif PASSMARK_PDTESTER_H
+#endif PASSMARK_PDTESTERPRO_H

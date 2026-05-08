@@ -60,6 +60,8 @@ public:
 
     // Configuration Abstraction (Replaces your direct tester.CurrentLimitType logic)
     virtual void SetCurrentLimitEnforcement(bool forceLimit, uint16_t maxCurr_mA) = 0;
+
+    virtual const char* GetProfileTypeName(int type) = 0;
 };
 
 class PDTester_Adapter : public USB_Tester {
@@ -140,6 +142,15 @@ public:
         }
         hw.SetConfig();
     }
+
+    const char* GetProfileTypeName(int type) override {
+        const char* profileType[] = { "LEGACY", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "APPLE-0.5A", "APPLE-1.0A",
+                                      "APPLE-2.1A", "APPLE-2.4A", "APPLE-3.0A", "SAMSUNG-2.0A", "BC-SDP", "BC-CDP", "BC-DCP", "UNKNOWN",
+                                      "UNKNOWN", "UNKNOWN", "QC1", "QC2", "QC3", "UNKNOWN", "UNKNOWN", "UNKNOWN", "USBC-1.5A", "USBC-3A",
+                                      "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "PD-FIX", "PD-BAT", "PD-VAR", "PD-APDO", "PD-AVS", "UNKNOWN" };
+
+        return profileType[type];
+    }
 };
 
 class PDTesterPro_Adapter : public USB_Tester {
@@ -219,6 +230,17 @@ public:
             hw.CurrentLimitType = Passmark_Pro::ENFORCE_LIMITS;
         }
         hw.SetConfigVolatile();
+    }
+
+    const char* GetProfileTypeName(int type) override {
+        const char* profileType[] = { "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "LEGACY", "UNKNOWN",
+                                      "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN", "APPLE", "APPLE", "APPLE", "APPLE", "APPLE",
+                                      "SAMSUNG", "BC-SDP", "BC-CDP", "BC-DCP", "UNKNOWN", "UNKNOWN", "UNKNOWN", "QC1", "QC2",
+                                      "QC3", "UNKNOWN", "UNKNOWN", "UNKNOWN", "USBC", "USBC", "USBC", "UNKNOWN", "UNKNOWN",
+                                      "UNKNOWN", "PD-FIX", "PD-BAT", "PD-VAR", "PD-PPS", "PD-AVS", "UNKNOWN", "EPR-FIX", "EPR-BAT",
+                                      "EPR-CAR", "EPR-AVS", "UNKNOWN", "UNKNOWN" };
+
+        return profileType[type];
     }
 };
 
