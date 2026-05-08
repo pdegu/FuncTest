@@ -1,0 +1,3 @@
+Test script directly utilizes PD Tester API rather than relying on indirect calls through console application.
+
+Currently supports PM240 devices only. PM125 device support coming soon...
