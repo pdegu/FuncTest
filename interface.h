@@ -244,4 +244,4 @@ public:
     }
 };
 
-#endif
+#endif INTERFACE_H

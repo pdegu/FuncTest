@@ -244,6 +244,7 @@ int main() {
 
     std::vector<int> selectedIndices;
     if (userInput == "0" || userInput.empty()) {
+        std::cout << "Testing all profiles...\n";
         for (int i = 0; i < capabilities.NumObjects; i++) {
             selectedIndices.push_back(i + 1);
         }
@@ -251,6 +252,7 @@ int main() {
     else {
         std::stringstream ss(userInput);
         std::string item;
+        std::cout << "Profile " << item << " selected...\n";
         while (std::getline(ss, item, ',')) {
             selectedIndices.push_back(std::stoi(item));
         }
@@ -284,7 +286,7 @@ int main() {
     }
 
     std::cout << "Data will be saved to: " << fullPath << "\n";
-    csvFile << "Profile_Index,Target_Voltage_mV,Target_Current_mA,Measured_Voltage_mV,Measured_Current_mA\n";
+    csvFile << "Profile_Index,Profile_Type,Target_Voltage_mV,Target_Current_mA,Measured_Voltage_mV,Measured_Current_mA\n";
 
     // 6. Execution Loop
     for (int index : selectedIndices) {
@@ -328,9 +330,8 @@ int main() {
                               << stats.measuredCurrent_mA << "mA\n";
 
                     // Write to CSV
-                    csvFile << index << "," << targetVolt_mV << "," << load << "," 
-                            << stats.measuredVoltage_mV << "," 
-                            << stats.measuredCurrent_mA << "\n";
+                    csvFile << index << profileTypeName << "," << targetVolt_mV << "," << load << ","
+                            << stats.measuredVoltage_mV << "," << stats.measuredCurrent_mA << "," << "\n";
 
                     // Check if OCP event occurred and exit loop if detected
                     if (load > 0 && (stats.measuredVoltage_mV < 5 || stats.measuredVoltage_mV < 1000)) {
@@ -392,7 +393,6 @@ int main() {
                     std::cout << "  -> Timeout reached. Skipping " << targetVolt_mV << "mV sweep...\n";
                 }
             }
-            break;
         }
         else {
             for (uint16_t targetVolt_mV = minVolt_mV; targetVolt_mV <= maxVolt_mV; targetVolt_mV += VOLTAGE_STEP_MV) {
@@ -420,7 +420,6 @@ int main() {
                     targetVolt_mV -= targetVolt_mV + VOLTAGE_STEP_MV - maxVolt_mV;
                 }
             }
-            break;
         }
 
         // Reset load to 0 before switching to the next profile
