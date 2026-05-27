@@ -330,7 +330,7 @@ int main() {
                               << stats.measuredCurrent_mA << "mA\n";
 
                     // Write to CSV
-                    csvFile << index << profileTypeName << "," << targetVolt_mV << "," << load << ","
+                    csvFile << index << "," << profileTypeName << "," << targetVolt_mV << "," << load << ","
                             << stats.measuredVoltage_mV << "," << stats.measuredCurrent_mA << "," << "\n";
 
                     // Check if OCP event occurred and exit loop if detected
