@@ -331,7 +331,7 @@ int main() {
 
                     // Write to CSV
                     csvFile << index << "," << profileTypeName << "," << targetVolt_mV << "," << load << ","
-                            << stats.measuredVoltage_mV << "," << stats.measuredCurrent_mA << "," << "\n";
+                            << stats.measuredVoltage_mV << "," << stats.measuredCurrent_mA << "\n";
 
                     // Check if OCP event occurred and exit loop if detected
                     if (load > 0 && (stats.measuredVoltage_mV < 5 || stats.measuredVoltage_mV < 1000)) {
